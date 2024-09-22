@@ -181,6 +181,31 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
+    /// Get the logits for the last token in the context.
+    ///
+    /// # Panics
+    ///
+    /// - logit `i` is not initialized.
+    pub fn candidates_last(&self) -> impl Iterator<Item = LlamaTokenData> + '_ {
+        (0_i32..).zip(self.get_logits_last()).map(|(i, logit)| {
+            let token = LlamaToken::new(i);
+            LlamaTokenData::new(token, *logit, 0_f32)
+        })
+    }
+
+    /// Get the logits for the last token in the context.
+    ///
+    /// # Panics
+    ///
+    /// - `n_vocab` does not fit into a usize
+    pub fn get_logits_last(&self) -> &[f32] {
+        let data = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
+        assert!(!data.is_null(), "logits data for last token is null");
+        let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
+
+        unsafe { slice::from_raw_parts(data, len) }
+    }
+
     /// Get the logits for the ith token in the context.
     ///
     /// # Panics

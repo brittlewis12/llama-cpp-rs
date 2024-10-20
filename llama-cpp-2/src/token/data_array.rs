@@ -2,7 +2,7 @@
 use crate::context::LlamaContext;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
-use llama_cpp_sys_2::llama_token;
+// use llama_cpp_sys_2::llama_token;
 use std::cmp::min;
 use std::ptr;
 
@@ -74,6 +74,7 @@ impl LlamaTokenDataArray {
         let mut c_llama_token_data_array = llama_cpp_sys_2::llama_token_data_array {
             data,
             size,
+            selected: -1, // TODO: how to set? accept as param?
             sorted: self.sorted,
         };
         let result = modify(&mut c_llama_token_data_array);
@@ -143,16 +144,17 @@ impl LlamaTokenDataArray {
         let penalty_last_n = min(penalty_last_n, last_tokens.len().saturating_sub(1));
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_repetition_penalties(
-                    ctx,
-                    c_llama_token_data_array,
-                    // safe cast as LlamaToken is repr(transparent)
-                    last_tokens.as_ptr().cast::<llama_token>(),
-                    penalty_last_n,
-                    penalty_repeat,
-                    penalty_freq,
-                    penalty_present,
-                );
+                todo!("figure out what to do about token_data_array sample_repetition_penalty");
+                // llama_cpp_sys_2::llama_sample_repetition_penalties(
+                //     ctx,
+                //     c_llama_token_data_array,
+                //     // safe cast as LlamaToken is repr(transparent)
+                //     last_tokens.as_ptr().cast::<llama_token>(),
+                //     penalty_last_n,
+                //     penalty_repeat,
+                //     penalty_freq,
+                //     penalty_present,
+                // );
             });
         }
     }
@@ -189,7 +191,8 @@ impl LlamaTokenDataArray {
         unsafe {
             let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_softmax(ctx, c_llama_token_data_array);
+                todo!("figure out what to do about token_data_array sample_softmax");
+                // llama_cpp_sys_2::llama_sample_softmax(ctx, c_llama_token_data_array);
             });
         }
     }
@@ -223,7 +226,8 @@ impl LlamaTokenDataArray {
         let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_temp(ctx, c_llama_token_data_array, temperature);
+                todo!("figure out what to do about token_data_array sample_temp");
+                // llama_cpp_sys_2::llama_sample_temp(ctx, c_llama_token_data_array, temperature);
             });
         }
     }
@@ -232,7 +236,8 @@ impl LlamaTokenDataArray {
     pub fn sample_token(&mut self, ctx: &mut LlamaContext) -> LlamaToken {
         let llama_token = unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_token(ctx.context.as_ptr(), c_llama_token_data_array)
+                todo!("figure out what to do about token_data_array sample_token");
+                // llama_cpp_sys_2::llama_sample_token(ctx.context.as_ptr(), c_llama_token_data_array)
             })
         };
         LlamaToken(llama_token)
@@ -243,7 +248,8 @@ impl LlamaTokenDataArray {
         let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_top_k(ctx, c_llama_token_data_array, k, min_keep);
+                todo!("figure out what to do about token_data_array sample_top_k");
+                // llama_cpp_sys_2::llama_sample_top_k(ctx, c_llama_token_data_array, k, min_keep);
             });
         }
     }
@@ -253,7 +259,8 @@ impl LlamaTokenDataArray {
         let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_tail_free(ctx, c_llama_token_data_array, z, min_keep);
+                todo!("figure out what to do about token_data_array sample_tail_free");
+                // llama_cpp_sys_2::llama_sample_tail_free(ctx, c_llama_token_data_array, z, min_keep);
             });
         }
     }
@@ -281,7 +288,8 @@ impl LlamaTokenDataArray {
         let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_typical(ctx, c_llama_token_data_array, p, min_keep);
+                todo!("figure out what to do about token_data_array sample_typical");
+                // llama_cpp_sys_2::llama_sample_typical(ctx, c_llama_token_data_array, p, min_keep);
             });
         }
     }
@@ -313,7 +321,8 @@ impl LlamaTokenDataArray {
         let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_top_p(ctx, c_llama_token_data_array, p, min_keep);
+                todo!("figure out what to do about token_data_array sample_top_p");
+                // llama_cpp_sys_2::llama_sample_top_p(ctx, c_llama_token_data_array, p, min_keep);
             });
         }
     }
@@ -340,7 +349,8 @@ impl LlamaTokenDataArray {
         let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_min_p(ctx, c_llama_token_data_array, p, min_keep);
+                todo!("figure out what to do about token_data_array sample_min_p");
+                // llama_cpp_sys_2::llama_sample_min_p(ctx, c_llama_token_data_array, p, min_keep);
             });
         }
     }
@@ -362,13 +372,14 @@ impl LlamaTokenDataArray {
         let mu_ptr = ptr::from_mut(mu);
         let token = unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_token_mirostat_v2(
-                    ctx.context.as_ptr(),
-                    c_llama_token_data_array,
-                    tau,
-                    eta,
-                    mu_ptr,
-                )
+                todo!("figure out what to do about token_data_array sample_token_mirostat_v2");
+                // llama_cpp_sys_2::llama_sample_token_mirostat_v2(
+                //     ctx.context.as_ptr(),
+                //     c_llama_token_data_array,
+                //     tau,
+                //     eta,
+                //     mu_ptr,
+                // )
             })
         };
         *mu = unsafe { *mu_ptr };
@@ -394,14 +405,15 @@ impl LlamaTokenDataArray {
         let mu_ptr = ptr::from_mut(mu);
         let token = unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_token_mirostat(
-                    ctx.context.as_ptr(),
-                    c_llama_token_data_array,
-                    tau,
-                    eta,
-                    m,
-                    mu_ptr,
-                )
+                todo!("figure out what to do about token_data_array sample_token_mirostat");
+                // llama_cpp_sys_2::llama_sample_token_mirostat(
+                //     ctx.context.as_ptr(),
+                //     c_llama_token_data_array,
+                //     tau,
+                //     eta,
+                //     m,
+                //     mu_ptr,
+                // )
             })
         };
         *mu = unsafe { *mu_ptr };

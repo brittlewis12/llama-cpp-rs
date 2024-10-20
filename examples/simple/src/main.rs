@@ -17,7 +17,8 @@ use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
-use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::sampler_chain::params::LlamaSamplerChainParams;
+use llama_cpp_2::sampler_chain::LlamaSampler;
 use std::ffi::CString;
 use std::io::Write;
 use std::num::NonZeroU32;
@@ -174,9 +175,11 @@ fn main() -> Result<()> {
         .with_context(|| "unable to load model")?;
 
     // initialize the context
-    let mut ctx_params = LlamaContextParams::default()
-        .with_n_ctx(ctx_size.or(Some(NonZeroU32::new(2048).unwrap())))
-        .with_seed(seed.unwrap_or(1234));
+    let mut ctx_params =
+        LlamaContextParams::default().with_n_ctx(ctx_size.or(Some(NonZeroU32::new(2048).unwrap())));
+    let sampler = LlamaSampler::new(LlamaSamplerChainParams::default())
+        .add_dist(seed.unwrap_or(1234))
+        .add_greedy();
     if let Some(threads) = threads {
         ctx_params = ctx_params.with_n_threads(threads);
     }
@@ -247,12 +250,9 @@ either reduce n_len or increase n_ctx"
     while n_cur <= n_len {
         // sample the next token
         {
-            let candidates = ctx.candidates();
-
-            let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
-
             // sample the most likely token
-            let new_token_id = ctx.sample_token_greedy(candidates_p);
+            let new_token_id = sampler.sample(&mut ctx, None);
+            sampler.accept(new_token_id);
 
             // is it an end of stream?
             if model.is_eog_token(new_token_id) {

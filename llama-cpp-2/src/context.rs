@@ -267,12 +267,16 @@ impl<'model> LlamaContext<'model> {
 
     /// Reset the timings for the context.
     pub fn reset_timings(&mut self) {
-        unsafe { llama_cpp_sys_2::llama_reset_timings(self.context.as_ptr()) }
+        unsafe {
+            llama_cpp_sys_2::llama_perf_context_reset(self.context.as_ptr());
+            // llama_cpp_sys_2::llama_perf_sampler_reset(self.sampler_chain.as_ptr());
+        }
     }
 
     /// Returns the timings for the context.
     pub fn timings(&mut self) -> LlamaTimings {
-        let timings = unsafe { llama_cpp_sys_2::llama_get_timings(self.context.as_ptr()) };
+        let timings = unsafe { llama_cpp_sys_2::llama_perf_context(self.context.as_ptr()) };
+        // let sampler_timings = unsafe { llama_cpp_sys_2::llama_perf_sampler(self.sampler_chain.as_ptr()) };
         LlamaTimings { timings }
     }
 

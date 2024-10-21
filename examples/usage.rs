@@ -14,7 +14,8 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
-use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::sampler_chain::params::LlamaSamplerChainParams;
+use llama_cpp_2::sampler_chain::LlamaSampler;
 use std::io::Write;
 
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
@@ -29,6 +30,7 @@ fn main() {
     let model =
         LlamaModel::load_from_file(&backend, model_path, &params).expect("unable to load model");
     let ctx_params = LlamaContextParams::default();
+    let sampler = LlamaSampler::new(LlamaSamplerChainParams::default()).add_greedy();
     let mut ctx = model
         .new_context(&backend, ctx_params)
         .expect("unable to create the llama_context");
@@ -57,12 +59,8 @@ fn main() {
     while n_cur <= n_len {
         // sample the next token
         {
-            let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
-
-            let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
-
             // sample the most likely token
-            let new_token_id = ctx.sample_token_greedy(candidates_p);
+            let new_token_id = sampler.sample(&mut ctx, None);
 
             // is it an end of stream?
             if new_token_id == model.token_eos() {

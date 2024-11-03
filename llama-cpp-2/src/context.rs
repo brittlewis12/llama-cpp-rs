@@ -17,7 +17,6 @@ use crate::{
 
 pub mod kv_cache;
 pub mod params;
-pub mod sample;
 pub mod session;
 
 /// Safe wrapper around `llama_context`.

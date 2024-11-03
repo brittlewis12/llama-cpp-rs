@@ -252,7 +252,6 @@ either reduce n_len or increase n_ctx"
         {
             // sample the most likely token
             let new_token_id = sampler.sample(&mut ctx, None);
-            sampler.accept(new_token_id);
 
             // is it an end of stream?
             if model.is_eog_token(new_token_id) {

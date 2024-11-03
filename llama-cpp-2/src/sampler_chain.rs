@@ -24,6 +24,14 @@ impl Debug for LlamaSampler {
 }
 
 impl LlamaSampler {
+    /// Create a new `LlamaSampler`.
+    /// ```
+    /// # use llama_cpp_2::sampler_chain::{LlamaSampler, params::LlamaSamplerChainParams};
+    /// let mut chain = LlamaSampler::new(LlamaSamplerChainParams::default());
+    /// chain = chain.add_temp(0.7);
+    /// chain = chain.add_dist(42);
+    /// assert_eq!(chain.len(), 2);
+    /// ```
     pub fn new(sampler_chain_params: params::LlamaSamplerChainParams) -> Self {
         let sampler = unsafe {
             NonNull::new(llama_cpp_sys_2::llama_sampler_chain_init(
@@ -120,22 +128,6 @@ impl LlamaSampler {
         self
     }
 
-    /// Initialize a tail-free sampler with the given z value and add it to the sampler chain.
-    ///
-    /// Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
-    pub fn add_tail_free(self, z: f32, min_keep: usize) -> Self {
-        unsafe {
-            let tail_free_sampler =
-                NonNull::new(llama_cpp_sys_2::llama_sampler_init_tail_free(z, min_keep))
-                    .expect("llama_sampler_chain_init_tail_free returned null");
-            llama_cpp_sys_2::llama_sampler_chain_add(
-                self.sampler.as_ptr(),
-                tail_free_sampler.as_ptr(),
-            );
-        }
-        self
-    }
-
     /// Initialize a typical-p sampler with the given value and add it to the sampler chain.
     pub fn add_typical_p(self, p: f32, min_keep: usize) -> Self {
         unsafe {
@@ -209,6 +201,23 @@ impl LlamaSampler {
         self
     }
 
+    /// Initialize an XTC sampler with the given values and add it to the sampler chain.
+    pub fn add_xtc(self, p: f32, t: f32, min_keep: usize, seed: u32) -> Self {
+        unsafe {
+            let xtc_sampler = NonNull::new(llama_cpp_sys_2::llama_sampler_init_xtc(
+                p, t, min_keep, seed,
+            ))
+            .expect("llama_sampler_chain_init_xtc returned null");
+            llama_cpp_sys_2::llama_sampler_chain_add(self.sampler.as_ptr(), xtc_sampler.as_ptr());
+        }
+        self
+    }
+
+    /// Get the number of samplers in the chain.
+    pub fn len(&self) -> i32 {
+        unsafe { llama_cpp_sys_2::llama_sampler_chain_n(self.sampler.as_ptr()) }
+    }
+
     /// Reset the sampler chain.
     pub fn reset(&self) {
         unsafe {
@@ -223,13 +232,6 @@ impl LlamaSampler {
             llama_cpp_sys_2::llama_sampler_sample(self.sampler.as_ptr(), ctx.context.as_ptr(), idx)
         };
         LlamaToken(token)
-    }
-
-    /// Accept a sampled token.
-    pub fn accept(&self, token: LlamaToken) {
-        unsafe {
-            llama_cpp_sys_2::llama_sampler_accept(self.sampler.as_ptr(), token.0);
-        }
     }
 
     /// Reset the timings for the sampler.

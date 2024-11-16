@@ -65,8 +65,7 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
             "*.a"
         }
     };
-    let libs_dir = out_dir.join("lib");
-    let pattern = libs_dir.join(lib_pattern);
+    let pattern = out_dir.join(lib_pattern);
     debug_log!("Extract libs {}", pattern.display());
 
     let mut lib_names: Vec<String> = Vec::new();
@@ -143,7 +142,6 @@ fn macos_link_search_path() -> Option<String> {
 }
 
 fn main() {
-
     let target = env::var("TARGET").unwrap();
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
@@ -152,6 +150,7 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
     let llama_src = Path::new(&manifest_dir).join("llama.cpp");
     let build_shared_libs = cfg!(feature = "cuda") || cfg!(feature = "dynamic-link");
+    let use_llamafile = cfg!(feature = "llamafile");
 
     let build_shared_libs = std::env::var("LLAMA_BUILD_SHARED_LIBS")
         .map(|v| v == "1")
@@ -166,6 +165,7 @@ fn main() {
     debug_log!("TARGET_DIR: {}", target_dir.display());
     debug_log!("OUT_DIR: {}", out_dir.display());
     debug_log!("BUILD_SHARED: {}", build_shared_libs);
+    debug_log!("LLAMAFILE: {}", use_llamafile);
 
     // Prepare sherpa-onnx source
     if !llama_dst.exists() {
@@ -196,7 +196,6 @@ fn main() {
         .generate()
         .expect("Failed to generate bindings");
 
-
     // Write the generated bindings to an output file
     let bindings_path = out_dir.join("bindings.rs");
     bindings
@@ -224,6 +223,8 @@ fn main() {
         if build_shared_libs { "ON" } else { "OFF" },
     );
 
+    config.define("GGML_LLAMAFILE", if use_llamafile { "ON" } else { "OFF" });
+
     if cfg!(target_os = "macos") {
         config.define("GGML_BLAS", "OFF");
     }
@@ -231,12 +232,12 @@ fn main() {
     if cfg!(windows) {
         config.static_crt(static_crt);
     }
-    
 
     if cfg!(feature = "vulkan") {
         config.define("GGML_VULKAN", "ON");
         if cfg!(windows) {
-            let vulkan_path = env::var("VULKAN_SDK").expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
+            let vulkan_path = env::var("VULKAN_SDK")
+                .expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
             let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
             println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
             println!("cargo:rustc-link-lib=vulkan-1");
@@ -266,11 +267,52 @@ fn main() {
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
     println!("cargo:rustc-link-search={}", build_dir.display());
+    println!(
+        "cargo:rustc-link-search={}",
+        build_dir.join("build/ggml/src").display()
+    );
+    println!(
+        "cargo:rustc-link-search={}",
+        build_dir.join("build/ggml/src/ggml-cpu").display()
+    );
+    println!(
+        "cargo:rustc-link-search={}",
+        build_dir.join("build/ggml/src/ggml-metal").display()
+    );
+    println!(
+        "cargo:rustc-link-search={}",
+        build_dir.join("build/ggml/src/ggml-cuda").display()
+    );
+    println!(
+        "cargo:rustc-link-search={}",
+        build_dir.join("build/ggml/src/ggml-vulkan").display()
+    );
 
     // Link libraries
     let llama_libs_kind = if build_shared_libs { "dylib" } else { "static" };
-    let llama_libs = extract_lib_names(&out_dir, build_shared_libs);
-
+    let mut llama_libs = extract_lib_names(&out_dir.join("lib"), build_shared_libs);
+    llama_libs.append(&mut extract_lib_names(
+        &build_dir.join("build/ggml/src"),
+        build_shared_libs,
+    ));
+    llama_libs.append(&mut extract_lib_names(
+        &build_dir.join("build/ggml/src/ggml-cpu"),
+        build_shared_libs,
+    ));
+    llama_libs.append(&mut extract_lib_names(
+        &build_dir.join("build/ggml/src/ggml-metal"),
+        build_shared_libs,
+    ));
+    llama_libs.append(&mut extract_lib_names(
+        &build_dir.join("build/ggml/src/ggml-vulkan"),
+        build_shared_libs,
+    ));
+    llama_libs.append(&mut extract_lib_names(
+        &build_dir.join("build/ggml/src/ggml-cuda"),
+        build_shared_libs,
+    ));
+    llama_libs.sort_unstable();
+    llama_libs.dedup();
     for lib in llama_libs {
         debug_log!(
             "LINK {}",
@@ -330,7 +372,7 @@ fn main() {
             debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
             if !dst.exists() {
                 std::fs::hard_link(asset.clone(), dst).unwrap();
-            }          
+            }
 
             // Copy DLLs to examples as well
             if target_dir.join("examples").exists() {

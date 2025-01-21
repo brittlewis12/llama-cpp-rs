@@ -97,27 +97,17 @@ impl LlamaSampler {
     /// Initialize a repetition penalty sampler and add it to the sampler chain.
     pub fn add_penalties(
         self,
-        n_vocab: i32,
-        special_eos_id: i32,
-        linefeed_id: i32,
         penalty_last_n: i32,
         penalty_repeat: f32,
         penalty_freq: f32,
         penalty_presence: f32,
-        penalize_nl: bool,
-        ignore_eos: bool,
     ) -> Self {
         unsafe {
             let penalties_sampler = NonNull::new(llama_cpp_sys_2::llama_sampler_init_penalties(
-                n_vocab,
-                special_eos_id,
-                linefeed_id,
                 penalty_last_n,
                 penalty_repeat,
                 penalty_freq,
                 penalty_presence,
-                penalize_nl,
-                ignore_eos,
             ))
             .expect("llama_sampler_chain_init_penalties returned null");
             llama_cpp_sys_2::llama_sampler_chain_add(

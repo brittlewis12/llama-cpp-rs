@@ -151,6 +151,7 @@ fn main() {
     let llama_src = Path::new(&manifest_dir).join("llama.cpp");
     let build_shared_libs = cfg!(feature = "cuda") || cfg!(feature = "dynamic-link");
     let use_llamafile = cfg!(feature = "llamafile");
+    let use_llamacurl = cfg!(feature = "llamacurl");
 
     let build_shared_libs = std::env::var("LLAMA_BUILD_SHARED_LIBS")
         .map(|v| v == "1")
@@ -166,6 +167,7 @@ fn main() {
     debug_log!("OUT_DIR: {}", out_dir.display());
     debug_log!("BUILD_SHARED: {}", build_shared_libs);
     debug_log!("LLAMAFILE: {}", use_llamafile);
+    debug_log!("LLAMACURL: {}", use_llamacurl);
 
     // Prepare sherpa-onnx source
     if !llama_dst.exists() {
@@ -224,6 +226,7 @@ fn main() {
     );
 
     config.define("GGML_LLAMAFILE", if use_llamafile { "ON" } else { "OFF" });
+    config.define("LLAMA_CURL", if use_llamacurl { "ON" } else { "OFF" });
 
     if cfg!(target_os = "macos") {
         config.define("GGML_BLAS", "OFF");

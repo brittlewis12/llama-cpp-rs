@@ -63,6 +63,9 @@ pub enum LLamaCppError {
     /// see [`EmbeddingsError`]
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
+    /// There was an error initializing a backend device.
+    #[error("Backend error: {0}")]
+    BackendError(String),
     // See [`LlamaSamplerError`]
 }
 

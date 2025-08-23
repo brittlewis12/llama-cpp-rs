@@ -455,8 +455,8 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
 
         // Disable Metal for iOS Simulator
-        let is_ios_simulator = target_triple.contains("-apple-ios-sim") ||
-                               (target_triple.contains("-apple-ios") && target_triple.contains("x86_64"));
+        let is_ios_simulator = target_triple.contains("-apple-ios-sim")
+            || (target_triple.contains("-apple-ios") && target_triple.contains("x86_64"));
         if is_ios_simulator {
             config.define("GGML_METAL", "OFF");
         }
@@ -712,8 +712,8 @@ fn main() {
         TargetOs::Apple(variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");
             // iOS Simulator doesn't support Metal
-            let is_ios_simulator = target_triple.contains("-apple-ios-sim") ||
-                                   (target_triple.contains("-apple-ios") && target_triple.contains("x86_64"));
+            let is_ios_simulator = target_triple.contains("-apple-ios-sim")
+                || (target_triple.contains("-apple-ios") && target_triple.contains("x86_64"));
             if !is_ios_simulator {
                 println!("cargo:rustc-link-lib=framework=Metal");
                 println!("cargo:rustc-link-lib=framework=MetalKit");

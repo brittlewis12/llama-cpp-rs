@@ -335,20 +335,33 @@ impl LlamaContextParams {
         self.context_params.n_ubatch
     }
 
-    /// Set the flash attention policy using llama.cpp enum
+    /// Set the flash attention policy.
+    ///
+    /// - `true` maps to `LLAMA_FLASH_ATTN_TYPE_AUTO` (llama.cpp decides per-model)
+    /// - `false` maps to `LLAMA_FLASH_ATTN_TYPE_DISABLED`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_flash_attention(true);
+    /// assert!(params.flash_attention());
+    /// ```
     #[must_use]
-    pub fn with_flash_attention_policy(
-        mut self,
-        policy: llama_cpp_sys_2::llama_flash_attn_type,
-    ) -> Self {
-        self.context_params.flash_attn_type = policy;
+    pub fn with_flash_attention(mut self, enabled: bool) -> Self {
+        self.context_params.flash_attn_type = if enabled {
+            llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_AUTO
+        } else {
+            llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_DISABLED
+        };
         self
     }
 
-    /// Get the flash attention policy
+    /// Get whether flash attention is enabled (auto or explicit).
     #[must_use]
-    pub fn flash_attention_policy(&self) -> llama_cpp_sys_2::llama_flash_attn_type {
-        self.context_params.flash_attn_type
+    pub fn flash_attention(&self) -> bool {
+        self.context_params.flash_attn_type != llama_cpp_sys_2::LLAMA_FLASH_ATTN_TYPE_DISABLED
     }
 
     /// Set the `offload_kqv` parameter to control offloading KV cache & KQV ops to GPU

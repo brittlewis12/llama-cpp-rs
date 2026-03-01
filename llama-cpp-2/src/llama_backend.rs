@@ -184,16 +184,16 @@ impl LlamaBackend {
     /// Initialize the Metal backend to pre-compile shaders
     /// This is useful to avoid JIT compilation under memory pressure when loading large models
     #[cfg(feature = "metal")]
-    pub fn initialize_metal() -> Result<(), LLamaCppError> {
+    pub fn initialize_metal() -> Result<(), LlamaCppError> {
         use std::ffi::CString;
 
         unsafe {
             // Get Metal backend registry
-            let metal_name = CString::new("Metal")
-                .map_err(|e| LLamaCppError::BackendError(format!("Invalid string: {}", e)))?;
+            let metal_name = CString::new("MTL")
+                .map_err(|e| LlamaCppError::BackendError(format!("Invalid string: {}", e)))?;
             let metal_reg = llama_cpp_sys_2::ggml_backend_reg_by_name(metal_name.as_ptr());
             if metal_reg.is_null() {
-                return Err(LLamaCppError::BackendError(
+                return Err(LlamaCppError::BackendError(
                     "Metal backend not available".to_string(),
                 ));
             }
@@ -201,7 +201,7 @@ impl LlamaBackend {
             // Get the first Metal device
             let metal_dev = llama_cpp_sys_2::ggml_backend_reg_dev_get(metal_reg, 0);
             if metal_dev.is_null() {
-                return Err(LLamaCppError::BackendError(
+                return Err(LlamaCppError::BackendError(
                     "No Metal device found".to_string(),
                 ));
             }
@@ -209,7 +209,7 @@ impl LlamaBackend {
             // Initialize the device - this triggers shader compilation!
             let metal_backend = llama_cpp_sys_2::ggml_backend_dev_init(metal_dev, std::ptr::null());
             if metal_backend.is_null() {
-                return Err(LLamaCppError::BackendError(
+                return Err(LlamaCppError::BackendError(
                     "Failed to initialize Metal backend".to_string(),
                 ));
             }

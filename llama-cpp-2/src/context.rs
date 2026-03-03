@@ -340,6 +340,9 @@ impl<'model> LlamaContext<'model> {
     /// Note: The upstream API now replaces all adapters at once via
     /// `llama_set_adapters_lora`. This clears all adapters from the context.
     ///
+    /// Note: the upstream API now only supports clearing all adapters at once.
+    /// The `adapter` parameter is kept for API compatibility but is ignored.
+    ///
     /// # Errors
     ///
     /// See [`LlamaLoraAdapterRemoveError`] for more information.
@@ -347,6 +350,7 @@ impl<'model> LlamaContext<'model> {
         &self,
         _adapter: &mut LlamaLoraAdapter,
     ) -> Result<(), LlamaLoraAdapterRemoveError> {
+        let _ = adapter; // kept for API compat; new API clears all adapters
         let err_code = unsafe {
             llama_cpp_sys_2::llama_set_adapters_lora(
                 self.context.as_ptr(),

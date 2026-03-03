@@ -350,7 +350,7 @@ impl<'model> LlamaContext<'model> {
         &self,
         _adapter: &mut LlamaLoraAdapter,
     ) -> Result<(), LlamaLoraAdapterRemoveError> {
-        let _ = adapter; // kept for API compat; new API clears all adapters
+        let _ = _adapter; // kept for API compat; new API clears all adapters
         let err_code = unsafe {
             llama_cpp_sys_2::llama_set_adapters_lora(
                 self.context.as_ptr(),

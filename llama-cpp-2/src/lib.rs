@@ -384,6 +384,9 @@ pub enum ApplyChatTemplateError {
     /// invalid grammar trigger data returned by llama.cpp.
     #[error("invalid grammar trigger data")]
     InvalidGrammarTriggerType,
+    /// the template could not be applied (e.g. unrecognized format).
+    #[error("template application failed")]
+    TemplateFailed,
 }
 
 /// Failed to parse a chat response.

@@ -188,9 +188,16 @@ impl MtmdContext {
     }
 
     /// Check whether non-causal attention mask is needed before `llama_decode`.
+    ///
+    /// Inspects the model's vision projector type. Upstream extended the
+    /// signature to take an optional input chunk (so callers can also
+    /// reason about audio projector type); we preserve the Rust API by
+    /// passing NULL, which short-circuits to the vision-projector check.
     #[must_use]
     pub fn decode_use_non_causal(&self) -> bool {
-        unsafe { llama_cpp_sys_2::mtmd_decode_use_non_causal(self.context.as_ptr()) }
+        unsafe {
+            llama_cpp_sys_2::mtmd_decode_use_non_causal(self.context.as_ptr(), std::ptr::null())
+        }
     }
 
     /// Check whether the current model uses M-RoPE for `llama_decode`.
@@ -214,11 +221,11 @@ impl MtmdContext {
         unsafe { llama_cpp_sys_2::mtmd_support_audio(self.context.as_ptr()) }
     }
 
-    /// Get audio bitrate in Hz (e.g., 16000 for Whisper).
+    /// Get audio sample rate in Hz (e.g., 16000 for Whisper).
     /// Returns None if audio is not supported.
     #[must_use]
-    pub fn get_audio_bitrate(&self) -> Option<u32> {
-        let rate = unsafe { llama_cpp_sys_2::mtmd_get_audio_bitrate(self.context.as_ptr()) };
+    pub fn get_audio_sample_rate(&self) -> Option<u32> {
+        let rate = unsafe { llama_cpp_sys_2::mtmd_get_audio_sample_rate(self.context.as_ptr()) };
         (rate > 0).then_some(rate.unsigned_abs())
     }
 

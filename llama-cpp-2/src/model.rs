@@ -137,8 +137,8 @@ pub struct ChatTemplateResult {
     pub chat_format: i32,
     /// Optional serialized PEG parser for tool-call parsing.
     pub parser: Option<String>,
-    /// Whether the parser expects a forced-open thinking block.
-    pub thinking_forced_open: bool,
+    /// Whether the model supports thinking/reasoning.
+    pub supports_thinking: bool,
     /// Whether tool calls should be parsed from the response.
     pub parse_tool_calls: bool,
 }
@@ -908,8 +908,12 @@ impl LlamaModel {
             )
         };
 
+        if res < 0 {
+            return Err(ApplyChatTemplateError::TemplateFailed);
+        }
+
         if res > buff.len().try_into().expect("Buffer size exceeds i32::MAX") {
-            buff.resize(res.try_into().expect("res is negative"), 0);
+            buff.resize(res as usize, 0);
 
             let res = unsafe {
                 llama_cpp_sys_2::llama_chat_apply_template(
@@ -921,9 +925,12 @@ impl LlamaModel {
                     buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
                 )
             };
+            if res < 0 {
+                return Err(ApplyChatTemplateError::TemplateFailed);
+            }
             assert_eq!(Ok(res), buff.len().try_into());
         }
-        buff.truncate(res.try_into().expect("res is negative"));
+        buff.truncate(res as usize);
         Ok(String::from_utf8(buff)?)
     }
 
@@ -955,7 +962,7 @@ impl LlamaModel {
             grammar: ptr::null_mut(),
             parser: ptr::null_mut(),
             chat_format: 0,
-            thinking_forced_open: false,
+            supports_thinking: false,
             grammar_lazy: false,
             grammar_triggers: ptr::null_mut(),
             grammar_triggers_count: 0,
@@ -1101,7 +1108,7 @@ impl LlamaModel {
                 additional_stops,
                 chat_format: raw_result.chat_format,
                 parser,
-                thinking_forced_open: raw_result.thinking_forced_open,
+                supports_thinking: raw_result.supports_thinking,
                 parse_tool_calls,
             })
         })();
@@ -1131,7 +1138,7 @@ impl LlamaModel {
             grammar: ptr::null_mut(),
             parser: ptr::null_mut(),
             chat_format: 0,
-            thinking_forced_open: false,
+            supports_thinking: false,
             grammar_lazy: false,
             grammar_triggers: ptr::null_mut(),
             grammar_triggers_count: 0,
@@ -1297,7 +1304,7 @@ impl LlamaModel {
                 additional_stops,
                 chat_format: raw_result.chat_format,
                 parser,
-                thinking_forced_open: raw_result.thinking_forced_open,
+                supports_thinking: raw_result.supports_thinking,
                 parse_tool_calls,
             })
         })();
@@ -1326,7 +1333,7 @@ impl ChatTemplateResult {
                 parser_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
-                self.thinking_forced_open,
+                self.supports_thinking,
                 &mut out_json,
             )
         };
@@ -1356,7 +1363,7 @@ impl ChatTemplateResult {
                 parser_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
-                self.thinking_forced_open,
+                self.supports_thinking,
             )
         };
         let state = NonNull::new(state).ok_or(ChatParseError::NullResult)?;

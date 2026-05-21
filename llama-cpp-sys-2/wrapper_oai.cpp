@@ -15,6 +15,29 @@
 
 using json = nlohmann::ordered_json;
 
+static json llama_rs_chat_msg_diff_to_json_oaicompat_local(const common_chat_msg_diff & diff) {
+    json delta = json::object();
+    if (!diff.reasoning_content_delta.empty()) {
+        delta["reasoning_content"] = diff.reasoning_content_delta;
+    }
+    if (!diff.content_delta.empty()) {
+        delta["content"] = diff.content_delta;
+    }
+    if (diff.tool_call_index != std::string::npos) {
+        json tool_call = json::object();
+        if (!diff.tool_call_delta.id.empty()) {
+            tool_call["id"] = diff.tool_call_delta.id;
+        }
+        tool_call["type"] = "function";
+        tool_call["function"] = {
+            {"name", diff.tool_call_delta.name},
+            {"arguments", diff.tool_call_delta.arguments},
+        };
+        delta["tool_calls"] = json::array({tool_call});
+    }
+    return delta;
+}
+
 struct llama_rs_chat_parse_state_oaicompat {
     common_chat_parser_params syntax;
     common_chat_msg chat_msg;
@@ -249,7 +272,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_with_tools_oaicompat(
     out_result->grammar = nullptr;
     out_result->parser = nullptr;
     out_result->chat_format = 0;
-    out_result->thinking_forced_open = false;
+    out_result->supports_thinking = false;
     out_result->grammar_lazy = false;
     out_result->grammar_triggers = nullptr;
     out_result->grammar_triggers_count = 0;
@@ -288,7 +311,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_with_tools_oaicompat(
             out_result->parser = llama_rs_dup_string(params.parser);
         }
         out_result->chat_format = static_cast<int>(params.format);
-        out_result->thinking_forced_open = params.thinking_forced_open;
+        out_result->supports_thinking = params.supports_thinking;
         out_result->grammar_lazy = params.grammar_lazy;
         const auto status_triggers = dup_trigger_array(
             params.grammar_triggers,
@@ -342,7 +365,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_oaicompat(
     out_result->grammar = nullptr;
     out_result->parser = nullptr;
     out_result->chat_format = 0;
-    out_result->thinking_forced_open = false;
+    out_result->supports_thinking = false;
     out_result->grammar_lazy = false;
     out_result->grammar_triggers = nullptr;
     out_result->grammar_triggers_count = 0;
@@ -396,7 +419,7 @@ extern "C" llama_rs_status llama_rs_apply_chat_template_oaicompat(
             out_result->parser = llama_rs_dup_string(params_out.parser);
         }
         out_result->chat_format = static_cast<int>(params_out.format);
-        out_result->thinking_forced_open = params_out.thinking_forced_open;
+        out_result->supports_thinking = params_out.supports_thinking;
         out_result->grammar_lazy = params_out.grammar_lazy;
 
         const auto status_triggers = dup_trigger_array(
@@ -451,7 +474,9 @@ extern "C" llama_rs_status llama_rs_chat_parse_to_oaicompat(
         common_chat_parser_params syntax;
         syntax.format = static_cast<common_chat_format>(chat_format);
         syntax.parse_tool_calls = parse_tool_calls;
-        syntax.thinking_forced_open = thinking_forced_open;
+        if (thinking_forced_open) {
+            syntax.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
+        }
         if (parser_data && std::strlen(parser_data) > 0) {
             syntax.parser.load(parser_data);
         }
@@ -531,7 +556,9 @@ extern "C" struct llama_rs_chat_parse_state_oaicompat * llama_rs_chat_parse_stat
         common_chat_parser_params syntax;
         syntax.format = static_cast<common_chat_format>(chat_format);
         syntax.parse_tool_calls = parse_tool_calls;
-        syntax.thinking_forced_open = thinking_forced_open;
+        if (thinking_forced_open) {
+            syntax.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
+        }
         if (parser_data && std::strlen(parser_data) > 0) {
             syntax.parser.load(parser_data);
         }
@@ -834,7 +861,7 @@ extern "C" llama_rs_status llama_rs_chat_msg_diff_to_oaicompat_json(
             msg_diff.tool_call_delta.id =
                 diff->tool_call_delta.id ? diff->tool_call_delta.id : "";
         }
-        auto json_delta = common_chat_msg_diff_to_json_oaicompat(msg_diff).dump();
+        auto json_delta = llama_rs_chat_msg_diff_to_json_oaicompat_local(msg_diff).dump();
         *out_json = llama_rs_dup_string(json_delta);
         return *out_json ? LLAMA_RS_STATUS_OK : LLAMA_RS_STATUS_ALLOCATION_FAILED;
     } catch (const std::exception &) {

@@ -9,10 +9,11 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, GrammarTriggerType, LlamaChatTemplate, LlamaModel, Special};
+use llama_cpp_2::model::{AddBos, GrammarTriggerType, LlamaChatTemplate, LlamaModel};
 use llama_cpp_2::openai::OpenAIChatTemplateParams;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::LlamaToken;
+use llama_cpp_2::TokenToStringError;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::num::NonZeroU32;
@@ -463,15 +464,20 @@ fn run_chat_completion(state: &AppState, body: &str) -> Result<String, HttpError
         }
         // sampler.accept(token);
 
-        let special = if preserved.contains(&token) {
-            Special::Tokenize
-        } else {
-            Special::Plaintext
+        let special = preserved.contains(&token);
+        let output_bytes = match state.model.token_to_piece_bytes(token, 8, special, None) {
+            Ok(bytes) => bytes,
+            Err(TokenToStringError::InsufficientBufferSpace(needed)) => state
+                .model
+                .token_to_piece_bytes(
+                    token,
+                    (-needed).try_into().expect("error buffer size is positive"),
+                    special,
+                    None,
+                )
+                .map_err(|e| internal_error(format!("token decode failed: {e}")))?,
+            Err(e) => return Err(internal_error(format!("token decode failed: {e}"))),
         };
-        let output_bytes = state
-            .model
-            .token_to_bytes(token, special)
-            .map_err(|e| internal_error(format!("token decode failed: {e}")))?;
         let mut output_string = String::with_capacity(32);
         let _ = decoder.decode_to_string(&output_bytes, &mut output_string, false);
         generated_text.push_str(&output_string);

@@ -269,6 +269,9 @@ fn main() {
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
+        .allowlist_function("gguf_.*")
+        .allowlist_type("gguf_.*")
+        .allowlist_var("GGUF_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
         .allowlist_function("llama_rs_.*")
@@ -1002,7 +1005,7 @@ fn main() {
                 common_profile_dir.display()
             );
         }
-        println!("cargo:rustc-link-lib=static=common");
+        println!("cargo:rustc-link-lib=static=llama-common");
     }
 
     if cfg!(feature = "system-ggml") {

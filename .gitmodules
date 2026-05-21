@@ -1,3 +1,7 @@
 [submodule "llama-cpp-sys-2/llama.cpp"]
 	path = llama-cpp-sys-2/llama.cpp
-	url = https://github.com/ggml-org/llama.cpp
+	url = https://github.com/brittlewis12/llama.cpp
+	# Pinned to brittlewis12/llama-cpp-sys-2-patches: upstream master plus
+	# llama_model_get_tensor() restoration for downstream consumers (llm
+	# response forest). An upstream PR to restore the API will let us
+	# point this back at ggml-org/llama.cpp.

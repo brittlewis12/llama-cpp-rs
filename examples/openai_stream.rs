@@ -119,7 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Prompt:\n{}", result.prompt);
     match result.grammar.as_deref() {
-        Some(grammar) => println!("\nGrammar:\n{}", grammar),
+        Some(grammar) => println!("\nGrammar:\n{grammar}"),
         None => println!("\nGrammar: <none>"),
     }
 
@@ -156,9 +156,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut sampler = if let Some(grammar) = result.grammar.as_deref() {
         if result.grammar_lazy {
-            if result.grammar_triggers.is_empty() {
-                panic!("grammar_lazy enabled but no triggers provided");
-            }
+            assert!(
+                !result.grammar_triggers.is_empty(),
+                "grammar_lazy enabled but no triggers provided"
+            );
             let mut trigger_patterns = Vec::new();
             let mut trigger_tokens = Vec::new();
             for trigger in &result.grammar_triggers {
@@ -171,12 +172,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     GrammarTriggerType::Word => {
                         let tokens = model.str_to_token(&trigger.value, AddBos::Never)?;
                         if tokens.len() == 1 {
-                            if !preserved.contains(&tokens[0]) {
-                                panic!(
-                                    "Grammar trigger word should be marked as preserved token: {}",
-                                    trigger.value
-                                );
-                            }
+                            assert!(
+                                preserved.contains(&tokens[0]),
+                                "Grammar trigger word should be marked as preserved token: {}",
+                                trigger.value
+                            );
                             trigger_tokens.push(tokens[0]);
                         } else {
                             trigger_patterns.push(regex_escape(&trigger.value));
@@ -295,7 +295,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if parsed_value
         .get("tool_calls")
         .and_then(|value| value.as_array())
-        .map_or(false, |tools| !tools.is_empty())
+        .is_some_and(|tools| !tools.is_empty())
     {
         "tool_calls"
     } else {
@@ -316,7 +316,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", serde_json::to_string(&final_chunk)?);
 
     let parsed_pretty = serde_json::to_string_pretty(&parsed_value)?;
-    println!("\nFinal message:\n{}", parsed_pretty);
+    println!("\nFinal message:\n{parsed_pretty}");
 
     Ok(())
 }

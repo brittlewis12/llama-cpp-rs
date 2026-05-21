@@ -42,7 +42,7 @@ pub(crate) fn status_is_ok(status: llama_cpp_sys_2::llama_rs_status) -> bool {
 }
 
 pub(crate) fn status_to_i32(status: llama_cpp_sys_2::llama_rs_status) -> i32 {
-    status as i32
+    status
 }
 
 /// A failable result from a llama.cpp function.
@@ -312,7 +312,7 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String> {
         .map_err(|err| LlamaCppError::JsonSchemaToGrammarError(err.to_string()))?;
     let mut out = std::ptr::null_mut();
     let rc = unsafe {
-        llama_cpp_sys_2::llama_rs_json_schema_to_grammar(schema_cstr.as_ptr(), false, &mut out)
+        llama_cpp_sys_2::llama_rs_json_schema_to_grammar(schema_cstr.as_ptr(), false, &raw mut out)
     };
 
     let result = {

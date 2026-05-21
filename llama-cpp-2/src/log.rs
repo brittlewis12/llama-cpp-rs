@@ -200,7 +200,7 @@ impl State {
                 origin = "crate",
                 "Message buffered unnnecessarily due to missing newline and not followed by a CONT"
             );
-            Self::generate_log(self.module, previous_log_level, buffer.as_str())
+            Self::generate_log(self.module, previous_log_level, buffer.as_str());
         }
 
         self.is_buffering
@@ -247,7 +247,7 @@ impl State {
                     text = text,
                     origin = "crate",
                     "Unknown llama.cpp log level"
-                )
+                );
             }
         }
     }
@@ -336,7 +336,8 @@ mod tests {
     fn cont_disabled_log() {
         let logger = create_logger(tracing::Level::INFO);
         let mut log_state = Box::new(State::new(Module::LlamaCpp, LogOptions::default()));
-        let log_ptr = log_state.as_mut() as *mut State as *mut std::os::raw::c_void;
+        let log_ptr =
+            std::ptr::from_mut::<State>(log_state.as_mut()).cast::<std::os::raw::c_void>();
 
         logs_to_trace(
             llama_cpp_sys_2::GGML_LOG_LEVEL_DEBUG,
@@ -372,7 +373,8 @@ mod tests {
     fn cont_enabled_log() {
         let logger = create_logger(tracing::Level::INFO);
         let mut log_state = Box::new(State::new(Module::LlamaCpp, LogOptions::default()));
-        let log_ptr = log_state.as_mut() as *mut State as *mut std::os::raw::c_void;
+        let log_ptr =
+            std::ptr::from_mut::<State>(log_state.as_mut()).cast::<std::os::raw::c_void>();
 
         logs_to_trace(
             llama_cpp_sys_2::GGML_LOG_LEVEL_INFO,

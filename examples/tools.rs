@@ -124,7 +124,7 @@ fn main() {
 
     println!("Prompt:\n{}", result.prompt);
     match result.grammar.as_deref() {
-        Some(grammar) => println!("\nGrammar:\n{}", grammar),
+        Some(grammar) => println!("\nGrammar:\n{grammar}"),
         None => println!("\nGrammar: <none>"),
     }
 
@@ -168,9 +168,10 @@ fn main() {
     }
     let mut sampler = if let Some(grammar) = result.grammar.as_deref() {
         if result.grammar_lazy {
-            if result.grammar_triggers.is_empty() {
-                panic!("grammar_lazy enabled but no triggers provided");
-            }
+            assert!(
+                !result.grammar_triggers.is_empty(),
+                "grammar_lazy enabled but no triggers provided"
+            );
             let mut trigger_patterns = Vec::new();
             let mut trigger_tokens = Vec::new();
             for trigger in &result.grammar_triggers {
@@ -185,12 +186,11 @@ fn main() {
                             .str_to_token(&trigger.value, AddBos::Never)
                             .expect("Failed to tokenize trigger word");
                         if tokens.len() == 1 {
-                            if !preserved.contains(&tokens[0]) {
-                                panic!(
-                                    "Grammar trigger word should be marked as preserved token: {}",
-                                    trigger.value
-                                );
-                            }
+                            assert!(
+                                preserved.contains(&tokens[0]),
+                                "Grammar trigger word should be marked as preserved token: {}",
+                                trigger.value
+                            );
                             trigger_tokens.push(tokens[0]);
                         } else {
                             trigger_patterns.push(regex_escape(&trigger.value));
@@ -289,5 +289,5 @@ fn main() {
         serde_json::from_str(&parsed_json).expect("Failed to decode parsed response");
     let parsed_pretty =
         serde_json::to_string_pretty(&parsed_value).expect("Failed to format parsed response");
-    println!("\n\nParsed message:\n{}", parsed_pretty);
+    println!("\n\nParsed message:\n{parsed_pretty}");
 }

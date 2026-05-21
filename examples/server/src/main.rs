@@ -303,7 +303,7 @@ fn run_chat_completion(state: &AppState, body: &str) -> Result<String, HttpError
     }
     let messages_json = messages.to_string();
 
-    let tools_json = request.get("tools").map(|value| value.to_string());
+    let tools_json = request.get("tools").map(std::string::ToString::to_string);
     let tool_choice = match request.get("tool_choice") {
         Some(Value::String(value)) => Some(value.clone()),
         Some(Value::Null) | None => None,
@@ -325,7 +325,7 @@ fn run_chat_completion(state: &AppState, body: &str) -> Result<String, HttpError
     };
 
     let chat_template_kwargs = match request.get("chat_template_kwargs") {
-        Some(Value::Object(_)) | Some(Value::Array(_)) => {
+        Some(Value::Object(_) | Value::Array(_)) => {
             Some(request["chat_template_kwargs"].to_string())
         }
         Some(Value::Null) | None => None,
@@ -570,11 +570,10 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or("llama.cpp")
         .to_string();
 
-    let backend = LlamaBackend::init()
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
+    let backend = LlamaBackend::init().map_err(|err| std::io::Error::other(err.to_string()))?;
     let params = LlamaModelParams::default();
     let model = LlamaModel::load_from_file(&backend, model_path, &params)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))?;
+        .map_err(|err| std::io::Error::other(err.to_string()))?;
     let default_template = model.chat_template(None).ok();
 
     let state = web::Data::new(AppState {

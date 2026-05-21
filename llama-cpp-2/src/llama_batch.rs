@@ -198,7 +198,7 @@ impl<'a> LlamaBatch<'a> {
     }
 }
 
-impl<'a> Drop for LlamaBatch<'a> {
+impl Drop for LlamaBatch<'_> {
     /// Drops the `LlamaBatch`.
     ///
     /// ```

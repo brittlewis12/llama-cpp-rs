@@ -19,6 +19,12 @@ const LLAMA_SPLIT_MODE_LAYER: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i8
 #[allow(clippy::cast_possible_truncation)]
 const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8;
 
+const LLAMA_LOAD_MODE_NONE: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_NONE;
+const LLAMA_LOAD_MODE_MMAP: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MMAP;
+const LLAMA_LOAD_MODE_MLOCK: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MLOCK;
+const LLAMA_LOAD_MODE_MMAP_MLOCK: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MMAP_MLOCK;
+const LLAMA_LOAD_MODE_DIRECT_IO: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_DIRECT_IO;
+
 /// A rusty wrapper around `llama_split_mode`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -106,6 +112,48 @@ impl Default for LlamaSplitMode {
     }
 }
 
+/// Controls how llama.cpp loads model data.
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum LlamaLoadMode {
+    /// Load model data without mmap, mlock, or direct I/O.
+    None = LLAMA_LOAD_MODE_NONE,
+    /// Memory-map model data.
+    #[default]
+    Mmap = LLAMA_LOAD_MODE_MMAP,
+    /// Load model data and lock it in RAM.
+    Mlock = LLAMA_LOAD_MODE_MLOCK,
+    /// Memory-map model data and lock it in RAM.
+    MmapMlock = LLAMA_LOAD_MODE_MMAP_MLOCK,
+    /// Load model data with direct I/O when available.
+    DirectIo = LLAMA_LOAD_MODE_DIRECT_IO,
+}
+
+/// An error that occurs when an unknown model load mode is encountered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LlamaLoadModeParseError(pub u32);
+
+impl TryFrom<u32> for LlamaLoadMode {
+    type Error = LlamaLoadModeParseError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            LLAMA_LOAD_MODE_NONE => Ok(Self::None),
+            LLAMA_LOAD_MODE_MMAP => Ok(Self::Mmap),
+            LLAMA_LOAD_MODE_MLOCK => Ok(Self::Mlock),
+            LLAMA_LOAD_MODE_MMAP_MLOCK => Ok(Self::MmapMlock),
+            LLAMA_LOAD_MODE_DIRECT_IO => Ok(Self::DirectIo),
+            _ => Err(LlamaLoadModeParseError(value)),
+        }
+    }
+}
+
+impl From<LlamaLoadMode> for u32 {
+    fn from(value: LlamaLoadMode) -> Self {
+        value as u32
+    }
+}
+
 /// The maximum number of devices supported.
 ///
 /// The real maximum number of devices is the lesser one of this value and the value returned by
@@ -127,8 +175,10 @@ impl Debug for LlamaModelParams {
             .field("n_gpu_layers", &self.params.n_gpu_layers)
             .field("main_gpu", &self.params.main_gpu)
             .field("vocab_only", &self.params.vocab_only)
-            .field("use_mmap", &self.params.use_mmap)
-            .field("use_mlock", &self.params.use_mlock)
+            .field("load_mode", &self.load_mode())
+            .field("use_mmap", &self.use_mmap())
+            .field("use_mlock", &self.use_mlock())
+            .field("load_mtp", &self.params.load_mtp)
             .field("split_mode", &self.split_mode())
             .field("devices", &self.devices)
             .field("kv_overrides", &"vec of kv_overrides")
@@ -276,16 +326,36 @@ impl LlamaModelParams {
         self.params.vocab_only
     }
 
-    /// use mmap if possible
-    #[must_use]
-    pub fn use_mmap(&self) -> bool {
-        self.params.use_mmap
+    /// Get the model loading mode.
+    ///
+    /// # Errors
+    /// Returns `LlamaLoadModeParseError` if llama.cpp reports an unknown mode.
+    pub fn load_mode(&self) -> Result<LlamaLoadMode, LlamaLoadModeParseError> {
+        LlamaLoadMode::try_from(self.params.load_mode)
     }
 
-    /// force system to keep model in RAM
+    /// Whether model data is memory-mapped.
+    #[must_use]
+    pub fn use_mmap(&self) -> bool {
+        matches!(
+            self.params.load_mode,
+            LLAMA_LOAD_MODE_MMAP | LLAMA_LOAD_MODE_MMAP_MLOCK
+        )
+    }
+
+    /// Whether model data is locked in RAM.
     #[must_use]
     pub fn use_mlock(&self) -> bool {
-        self.params.use_mlock
+        matches!(
+            self.params.load_mode,
+            LLAMA_LOAD_MODE_MLOCK | LLAMA_LOAD_MODE_MMAP_MLOCK
+        )
+    }
+
+    /// Whether embedded MTP layers are loaded.
+    #[must_use]
+    pub fn load_mtp(&self) -> bool {
+        self.params.load_mtp
     }
 
     /// get the split mode
@@ -352,10 +422,49 @@ impl LlamaModelParams {
         self
     }
 
-    /// sets `use_mlock`
+    /// Sets the model loading mode.
     #[must_use]
-    pub fn with_use_mlock(mut self, use_mlock: bool) -> Self {
-        self.params.use_mlock = use_mlock;
+    pub fn with_load_mode(mut self, load_mode: LlamaLoadMode) -> Self {
+        self.params.load_mode = load_mode.into();
+        self
+    }
+
+    /// Enables or disables mmap while preserving the current mlock setting.
+    /// Disabling mmap preserves direct I/O mode; enabling it replaces direct I/O mode.
+    #[must_use]
+    pub fn with_use_mmap(self, use_mmap: bool) -> Self {
+        if !use_mmap && self.params.load_mode == LLAMA_LOAD_MODE_DIRECT_IO {
+            return self;
+        }
+        let load_mode = match (use_mmap, self.use_mlock()) {
+            (false, false) => LlamaLoadMode::None,
+            (true, false) => LlamaLoadMode::Mmap,
+            (false, true) => LlamaLoadMode::Mlock,
+            (true, true) => LlamaLoadMode::MmapMlock,
+        };
+        self.with_load_mode(load_mode)
+    }
+
+    /// Enables or disables mlock while preserving the current mmap setting.
+    /// Disabling mlock preserves direct I/O mode; enabling it replaces direct I/O mode.
+    #[must_use]
+    pub fn with_use_mlock(self, use_mlock: bool) -> Self {
+        if !use_mlock && self.params.load_mode == LLAMA_LOAD_MODE_DIRECT_IO {
+            return self;
+        }
+        let load_mode = match (self.use_mmap(), use_mlock) {
+            (false, false) => LlamaLoadMode::None,
+            (true, false) => LlamaLoadMode::Mmap,
+            (false, true) => LlamaLoadMode::Mlock,
+            (true, true) => LlamaLoadMode::MmapMlock,
+        };
+        self.with_load_mode(load_mode)
+    }
+
+    /// Enables or disables loading embedded MTP layers.
+    #[must_use]
+    pub fn with_load_mtp(mut self, load_mtp: bool) -> Self {
+        self.params.load_mtp = load_mtp;
         self
     }
 
@@ -404,13 +513,15 @@ impl LlamaModelParams {
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
 /// ```
 /// # use llama_cpp_2::model::params::LlamaModelParams;
-/// use llama_cpp_2::model::params::LlamaSplitMode;
+/// use llama_cpp_2::model::params::{LlamaLoadMode, LlamaSplitMode};
 /// let params = LlamaModelParams::default();
 /// assert_eq!(params.n_gpu_layers(), -1, "n_gpu_layers should be -1");
 /// assert_eq!(params.main_gpu(), 0, "main_gpu should be 0");
 /// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
+/// assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mmap), "load_mode should be mmap");
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
 /// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
+/// assert_eq!(params.load_mtp(), false, "load_mtp should be false");
 /// assert_eq!(params.split_mode(), Ok(LlamaSplitMode::Layer), "split_mode should be LAYER");
 /// assert_eq!(params.devices().len(), 0, "devices should be empty");
 /// ```
@@ -433,5 +544,49 @@ impl Default for LlamaModelParams {
             }],
             devices: Box::pin([std::ptr::null_mut(); 16]),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LlamaLoadMode, LlamaModelParams};
+
+    #[test]
+    fn load_mode_compatibility_flags_preserve_each_other() {
+        let params = LlamaModelParams::default();
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mmap));
+        assert!(params.use_mmap());
+        assert!(!params.use_mlock());
+
+        let params = params.with_use_mlock(true);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::MmapMlock));
+
+        let params = params.with_use_mmap(false);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mlock));
+
+        let params = params.with_use_mlock(false);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::None));
+
+        let params = params.with_use_mmap(true);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mmap));
+    }
+
+    #[test]
+    fn direct_io_and_mtp_are_exposed() {
+        let params = LlamaModelParams::default()
+            .with_load_mode(LlamaLoadMode::DirectIo)
+            .with_load_mtp(true);
+
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::DirectIo));
+        assert!(!params.use_mmap());
+        assert!(!params.use_mlock());
+        assert!(params.load_mtp());
+
+        let params = params.with_use_mmap(false).with_use_mlock(false);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::DirectIo));
+
+        let params = params.with_use_mmap(true);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mmap));
+        assert!(params.load_mtp());
     }
 }

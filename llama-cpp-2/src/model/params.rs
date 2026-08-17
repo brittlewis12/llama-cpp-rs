@@ -19,11 +19,12 @@ const LLAMA_SPLIT_MODE_LAYER: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i8
 #[allow(clippy::cast_possible_truncation)]
 const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8;
 
-const LLAMA_LOAD_MODE_NONE: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_NONE;
-const LLAMA_LOAD_MODE_MMAP: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MMAP;
-const LLAMA_LOAD_MODE_MLOCK: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MLOCK;
-const LLAMA_LOAD_MODE_MMAP_MLOCK: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MMAP_MLOCK;
-const LLAMA_LOAD_MODE_DIRECT_IO: u32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_DIRECT_IO;
+const LLAMA_LOAD_MODE_AUTO: i32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_AUTO;
+const LLAMA_LOAD_MODE_NONE: i32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_NONE;
+const LLAMA_LOAD_MODE_MMAP: i32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MMAP;
+const LLAMA_LOAD_MODE_MLOCK: i32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MLOCK;
+const LLAMA_LOAD_MODE_MMAP_MLOCK: i32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_MMAP_MLOCK;
+const LLAMA_LOAD_MODE_DIRECT_IO: i32 = llama_cpp_sys_2::LLAMA_LOAD_MODE_DIRECT_IO;
 
 /// A rusty wrapper around `llama_split_mode`.
 #[repr(i8)]
@@ -113,13 +114,15 @@ impl Default for LlamaSplitMode {
 }
 
 /// Controls how llama.cpp loads model data.
-#[repr(u32)]
+#[repr(i32)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum LlamaLoadMode {
+    /// Automatically select a loading mode based on device capabilities.
+    #[default]
+    Auto = LLAMA_LOAD_MODE_AUTO,
     /// Load model data without mmap, mlock, or direct I/O.
     None = LLAMA_LOAD_MODE_NONE,
     /// Memory-map model data.
-    #[default]
     Mmap = LLAMA_LOAD_MODE_MMAP,
     /// Load model data and lock it in RAM.
     Mlock = LLAMA_LOAD_MODE_MLOCK,
@@ -131,13 +134,14 @@ pub enum LlamaLoadMode {
 
 /// An error that occurs when an unknown model load mode is encountered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LlamaLoadModeParseError(pub u32);
+pub struct LlamaLoadModeParseError(pub i32);
 
-impl TryFrom<u32> for LlamaLoadMode {
+impl TryFrom<i32> for LlamaLoadMode {
     type Error = LlamaLoadModeParseError;
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
+            LLAMA_LOAD_MODE_AUTO => Ok(Self::Auto),
             LLAMA_LOAD_MODE_NONE => Ok(Self::None),
             LLAMA_LOAD_MODE_MMAP => Ok(Self::Mmap),
             LLAMA_LOAD_MODE_MLOCK => Ok(Self::Mlock),
@@ -148,9 +152,25 @@ impl TryFrom<u32> for LlamaLoadMode {
     }
 }
 
+#[allow(clippy::cast_possible_wrap)]
+impl TryFrom<u32> for LlamaLoadMode {
+    type Error = LlamaLoadModeParseError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::try_from(value as i32)
+    }
+}
+
+impl From<LlamaLoadMode> for i32 {
+    fn from(value: LlamaLoadMode) -> Self {
+        value as i32
+    }
+}
+
+#[allow(clippy::cast_sign_loss)]
 impl From<LlamaLoadMode> for u32 {
     fn from(value: LlamaLoadMode) -> Self {
-        value as u32
+        i32::from(value) as u32
     }
 }
 
@@ -334,12 +354,12 @@ impl LlamaModelParams {
         LlamaLoadMode::try_from(self.params.load_mode)
     }
 
-    /// Whether model data is memory-mapped.
+    /// Whether model data is memory-mapped, or automatically mapped when supported.
     #[must_use]
     pub fn use_mmap(&self) -> bool {
         matches!(
             self.params.load_mode,
-            LLAMA_LOAD_MODE_MMAP | LLAMA_LOAD_MODE_MMAP_MLOCK
+            LLAMA_LOAD_MODE_AUTO | LLAMA_LOAD_MODE_MMAP | LLAMA_LOAD_MODE_MMAP_MLOCK
         )
     }
 
@@ -430,10 +450,10 @@ impl LlamaModelParams {
     }
 
     /// Enables or disables mmap while preserving the current mlock setting.
-    /// Disabling mmap preserves direct I/O mode; enabling it replaces direct I/O mode.
+    /// Leaves the loading mode unchanged when it already has the requested behavior.
     #[must_use]
     pub fn with_use_mmap(self, use_mmap: bool) -> Self {
-        if !use_mmap && self.params.load_mode == LLAMA_LOAD_MODE_DIRECT_IO {
+        if use_mmap == self.use_mmap() {
             return self;
         }
         let load_mode = match (use_mmap, self.use_mlock()) {
@@ -446,10 +466,10 @@ impl LlamaModelParams {
     }
 
     /// Enables or disables mlock while preserving the current mmap setting.
-    /// Disabling mlock preserves direct I/O mode; enabling it replaces direct I/O mode.
+    /// Leaves the loading mode unchanged when it already has the requested behavior.
     #[must_use]
     pub fn with_use_mlock(self, use_mlock: bool) -> Self {
-        if !use_mlock && self.params.load_mode == LLAMA_LOAD_MODE_DIRECT_IO {
+        if use_mlock == self.use_mlock() {
             return self;
         }
         let load_mode = match (self.use_mmap(), use_mlock) {
@@ -518,7 +538,7 @@ impl LlamaModelParams {
 /// assert_eq!(params.n_gpu_layers(), -1, "n_gpu_layers should be -1");
 /// assert_eq!(params.main_gpu(), 0, "main_gpu should be 0");
 /// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
-/// assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mmap), "load_mode should be mmap");
+/// assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Auto), "load_mode should be auto");
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
 /// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
 /// assert_eq!(params.load_mtp(), false, "load_mtp should be false");
@@ -554,9 +574,14 @@ mod tests {
     #[test]
     fn load_mode_compatibility_flags_preserve_each_other() {
         let params = LlamaModelParams::default();
-        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Mmap));
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Auto));
+        assert_eq!(LlamaLoadMode::try_from(u32::MAX), Ok(LlamaLoadMode::Auto));
+        assert_eq!(u32::from(LlamaLoadMode::Auto), u32::MAX);
         assert!(params.use_mmap());
         assert!(!params.use_mlock());
+
+        let params = params.with_use_mmap(true).with_use_mlock(false);
+        assert_eq!(params.load_mode(), Ok(LlamaLoadMode::Auto));
 
         let params = params.with_use_mlock(true);
         assert_eq!(params.load_mode(), Ok(LlamaLoadMode::MmapMlock));

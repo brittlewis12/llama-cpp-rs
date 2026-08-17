@@ -837,6 +837,7 @@ fn main() {
     // and their CMakeLists.txt files, which are not included in the crate package.
     if cfg!(feature = "mtmd") {
         let mtmd_src = llama_src.join("tools/mtmd");
+        let hash_src = llama_src.join("vendor/hash");
         let mut mtmd_build = cc::Build::new();
         mtmd_build
             .cpp(true)
@@ -846,8 +847,10 @@ fn main() {
             .include(llama_src.join("ggml/include"))
             .include(llama_src.join("common"))
             .include(llama_src.join("vendor"))
+            .include(&hash_src)
             .flag_if_supported("-std=c++17")
             .flag_if_supported("-Wno-cast-qual")
+            .flag_if_supported("-Wno-unused-function")
             .pic(true);
 
         if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
@@ -869,7 +872,16 @@ fn main() {
             }
         }
 
+        mtmd_build.file(hash_src.join("hash.cpp"));
         mtmd_build.compile("mtmd");
+
+        let mut sha256_build = cc::Build::new();
+        sha256_build
+            .file(hash_src.join("sha256/sha256.c"))
+            .include(&hash_src)
+            .warnings(false)
+            .pic(true)
+            .compile("vendor_hash_sha256");
     }
 
     // Search paths

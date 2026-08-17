@@ -273,6 +273,7 @@ impl MtmdContext {
         let text_cstring = CString::new(text.text)?;
         let input_text = llama_cpp_sys_2::mtmd_input_text {
             text: text_cstring.as_ptr(),
+            text_len: text_cstring.as_bytes().len(),
             add_special: text.add_special,
             parse_special: text.parse_special,
         };
@@ -342,9 +343,10 @@ impl Drop for MtmdContext {
 /// Represents bitmap data for images or audio that can be processed
 /// by the multimodal system. For images, data is stored in RGB format.
 /// For audio, data is stored as PCM F32 samples.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MtmdBitmap {
     pub(crate) bitmap: NonNull<llama_cpp_sys_2::mtmd_bitmap>,
+    video_context: Option<NonNull<llama_cpp_sys_2::mtmd_helper_video>>,
 }
 
 // MtmdBitmap is thread safe
@@ -352,6 +354,22 @@ unsafe impl Send for MtmdBitmap {}
 unsafe impl Sync for MtmdBitmap {}
 
 impl MtmdBitmap {
+    fn from_helper(
+        wrapper: llama_cpp_sys_2::mtmd_helper_bitmap_wrapper,
+    ) -> Result<Self, MtmdBitmapError> {
+        let video_context = NonNull::new(wrapper.video_ctx);
+        let Some(bitmap) = NonNull::new(wrapper.bitmap) else {
+            if let Some(video_context) = video_context {
+                unsafe { llama_cpp_sys_2::mtmd_helper_video_free(video_context.as_ptr()) };
+            }
+            return Err(MtmdBitmapError::NullResult);
+        };
+        Ok(Self {
+            bitmap,
+            video_context,
+        })
+    }
+
     /// Create a bitmap from image data in RGB format.
     ///
     /// # Arguments
@@ -389,7 +407,10 @@ impl MtmdBitmap {
         let bitmap = unsafe { llama_cpp_sys_2::mtmd_bitmap_init(nx, ny, data.as_ptr()) };
 
         let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        Ok(Self {
+            bitmap,
+            video_context: None,
+        })
     }
 
     /// Create a bitmap from audio data in PCM F32 format.
@@ -424,7 +445,10 @@ impl MtmdBitmap {
             unsafe { llama_cpp_sys_2::mtmd_bitmap_init_from_audio(data.len(), data.as_ptr()) };
 
         let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        Ok(Self {
+            bitmap,
+            video_context: None,
+        })
     }
 
     /// Create a bitmap from a file.
@@ -456,11 +480,11 @@ impl MtmdBitmap {
             llama_cpp_sys_2::mtmd_helper_bitmap_init_from_file(
                 ctx.context.as_ptr(),
                 path_cstr.as_ptr(),
+                false,
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        Self::from_helper(bitmap)
     }
 
     /// Create a bitmap from a buffer containing file data.
@@ -491,11 +515,11 @@ impl MtmdBitmap {
                 ctx.context.as_ptr(),
                 data.as_ptr(),
                 data.len(),
+                false,
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        Self::from_helper(bitmap)
     }
 
     /// Get bitmap width in pixels.
@@ -578,7 +602,10 @@ impl MtmdBitmap {
 
 impl Drop for MtmdBitmap {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::mtmd_bitmap_free(self.bitmap.as_ptr()) }
+        unsafe { llama_cpp_sys_2::mtmd_bitmap_free(self.bitmap.as_ptr()) };
+        if let Some(video_context) = self.video_context {
+            unsafe { llama_cpp_sys_2::mtmd_helper_video_free(video_context.as_ptr()) };
+        }
     }
 }
 

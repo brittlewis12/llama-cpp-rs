@@ -697,6 +697,34 @@ impl LlamaContextParams {
     pub fn n_seq_max(&self) -> u32 {
         self.context_params.n_seq_max
     }
+
+    /// Set the maximum number of outputs in a micro-batch. Zero uses `n_batch`.
+    #[must_use]
+    pub fn with_n_outputs_max(mut self, n_outputs_max: u32) -> Self {
+        self.context_params.n_outputs_max = n_outputs_max;
+        self
+    }
+
+    /// Get the maximum number of outputs in a micro-batch.
+    #[must_use]
+    pub fn n_outputs_max(&self) -> u32 {
+        self.context_params.n_outputs_max
+    }
+
+    /// Set the maximum number of outputs per sequence.
+    /// Zero uses [`Self::n_outputs_max`].
+    #[must_use]
+    pub fn with_n_outputs_max_per_seq(mut self, n_outputs_max_per_seq: u32) -> Self {
+        self.context_params.n_outputs_max_per_seq = n_outputs_max_per_seq;
+        self
+    }
+
+    /// Get the maximum number of outputs per sequence.
+    #[must_use]
+    pub fn n_outputs_max_per_seq(&self) -> u32 {
+        self.context_params.n_outputs_max_per_seq
+    }
+
     /// Set the KV cache data type for K
     /// use llama_cpp_2::context::params::{LlamaContextParams, KvCacheType};
     /// let params = LlamaContextParams::default().with_type_k(KvCacheType::Q4_0);
